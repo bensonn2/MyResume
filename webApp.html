@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Advanced Platformer</title>
+<style>
+body { margin:0; overflow:hidden; background:black; }
+canvas { display:block; margin:auto; image-rendering:pixelated; }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// ===== PLAYER =====
+let player = {
+    x:50,y:300,w:24,h:24,
+    dx:0,dy:0,
+    speed:3,
+    jump:-10,
+    grounded:false,
+    onWall:false
+};
+
+const gravity = 0.5;
+let keys = {};
+let score = 0;
+
+document.addEventListener("keydown", e=>keys[e.key]=true);
+document.addEventListener("keyup", e=>keys[e.key]=false);
+
+// ===== CAMERA =====
+let cameraX = 0;
+
+// ===== LEVEL =====
+let level = {
+    width:2000,
+    platforms:[
+        {x:0,y:370,w:2000,h:30},
+        {x:200,y:300,w:120,h:10},
+        {x:400,y:250,w:120,h:10},
+        {x:650,y:200,w:120,h:10},
+        {x:900,y:260,w:120,h:10},
+        {x:1200,y:220,w:120,h:10},
+        {x:1500,y:180,w:120,h:10}
+    ],
+    coins:[
+        {x:220,y:260,collected:false},
+        {x:420,y:210,collected:false},
+        {x:670,y:160,collected:false},
+        {x:920,y:220,collected:false},
+        {x:1220,y:180,collected:false},
+        {x:1520,y:140,collected:false}
+    ],
+    enemies:[
+        {x:400,y:230,w:20,h:20,dir:1,min:400,max:520},
+        {x:900,y:240,w:20,h:20,dir:1,min:900,max:1020},
+        {x:1500,y:160,w:20,h:20,dir:1,min:1500,max:1620}
+    ],
+    goal:{x:1850,y:140,w:30,h:40}
+};
+
+// ===== UPDATE =====
+function update(){
+
+    // Movement
+    if(keys["a"]||keys["ArrowLeft"]) player.dx=-player.speed;
+    else if(keys["d"]||keys["ArrowRight"]) player.dx=player.speed;
+    else player.dx=0;
+
+    // Jump + Wall Jump
+    if(keys[" "]||keys["ArrowUp"]){
+        if(player.grounded){
+            player.dy=player.jump;
+            player.grounded=false;
+        } else if(player.onWall){
+            player.dy=player.jump;
+            player.dx *= -1; // push off wall
+        }
+    }
+
+    player.dy += gravity;
+    player.x += player.dx;
+    player.y += player.dy;
+
+    player.grounded=false;
+    player.onWall=false;
+
+    // Platform collision
+    level.platforms.forEach(p=>{
+        if(player.x < p.x+p.w &&
+           player.x+player.w > p.x &&
+           player.y < p.y+p.h &&
+           player.y+player.h > p.y){
+
+            if(player.dy > 0){
+                player.y = p.y - player.h;
+                player.dy = 0;
+                player.grounded = true;
+            }
+        }
+    });
+
+    // Wall detection
+    level.platforms.forEach(p=>{
+        if(player.y+player.h > p.y &&
+           player.y < p.y+p.h){
+
+            if(player.x <= p.x+p.w && player.x > p.x+p.w-5){
+                player.onWall = true;
+            }
+            if(player.x+player.w >= p.x && player.x+player.w < p.x+5){
+                player.onWall = true;
+            }
+        }
+    });
+
+    // Coins
+    level.coins.forEach(c=>{
+        if(!c.collected &&
+           player.x < c.x+10 &&
+           player.x+player.w > c.x &&
+           player.y < c.y+10 &&
+           player.y+player.h > c.y){
+            c.collected=true;
+            score++;
+        }
+    });
+
+    // Enemies
+    level.enemies.forEach(e=>{
+        e.x += e.dir*1.5;
+        if(e.x < e.min || e.x > e.max) e.dir *= -1;
+
+        if(player.x < e.x+e.w &&
+           player.x+player.w > e.x &&
+           player.y < e.y+e.h &&
+           player.y+player.h > e.y){
+            // reset player
+            player.x=50; player.y=300;
+            player.dy=0;
+        }
+    });
+
+    // Goal
+    let g = level.goal;
+    if(player.x < g.x+g.w &&
+       player.x+player.w > g.x &&
+       player.y < g.y+g.h &&
+       player.y+player.h > g.y){
+        alert("Level Complete!");
+        location.reload();
+    }
+
+    // Camera follows player
+    cameraX = player.x - 400;
+    if(cameraX < 0) cameraX = 0;
+    if(cameraX > level.width - 800) cameraX = level.width - 800;
+}
+
+// ===== DRAW HELPERS =====
+function drawPlayer(){
+    let x = player.x - cameraX;
+    let y = player.y;
+
+    ctx.fillStyle="#ffcc99";
+    ctx.fillRect(x+6,y+2,12,10);
+    ctx.fillStyle="red";
+    ctx.fillRect(x+4,y+12,16,8);
+    ctx.fillStyle="blue";
+    ctx.fillRect(x+4,y+20,6,4);
+    ctx.fillRect(x+14,y+20,6,4);
+}
+
+function drawPlatform(p){
+    ctx.fillStyle="#654321";
+    ctx.fillRect(p.x-cameraX,p.y,p.w,p.h);
+}
+
+function drawCoin(c){
+    if(c.collected) return;
+    ctx.fillStyle="gold";
+    ctx.beginPath();
+    ctx.arc(c.x-cameraX,c.y,5,0,Math.PI*2);
+    ctx.fill();
+}
+
+function drawEnemy(e){
+    ctx.fillStyle="purple";
+    ctx.fillRect(e.x-cameraX,e.y,e.w,e.h);
+}
+
+function drawGoal(g){
+    ctx.fillStyle="black";
+    ctx.fillRect(g.x-cameraX+10,g.y,4,40);
+    ctx.fillStyle="lime";
+    ctx.beginPath();
+    ctx.moveTo(g.x-cameraX+14,g.y);
+    ctx.lineTo(g.x-cameraX+30,g.y+10);
+    ctx.lineTo(g.x-cameraX+14,g.y+20);
+    ctx.fill();
+}
+
+function drawBackground(){
+    ctx.fillStyle="#87CEEB";
+    ctx.fillRect(0,0,800,400);
+}
+
+// ===== DRAW =====
+function draw(){
+    drawBackground();
+
+    level.platforms.forEach(drawPlatform);
+    level.coins.forEach(drawCoin);
+    level.enemies.forEach(drawEnemy);
+
+    drawGoal(level.goal);
+    drawPlayer();
+
+    ctx.fillStyle="black";
+    ctx.fillText("Score: "+score,10,20);
+}
+
+// ===== LOOP =====
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>
